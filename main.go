@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
+	"strings"
 
 	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/go-playground/validator"
@@ -41,6 +43,33 @@ func URLFromDB(id int) string {
 	return res
 }
 
+// Parsing GET to ClientRequest struct
+func ParseGET(writer http.ResponseWriter, request *http.Request, obj *ClientRequest) {
+	request_id, err := strconv.Atoi(request.URL.Query().Get("request_id"))
+	if err != nil {
+		obj.Request_id = 0
+	}
+	url_package := request.URL.Query().Get("url_package")
+	urls_string := strings.Split(url_package, ",")
+	var urls_int []int
+	for _, item := range urls_string {
+		temp, err := strconv.Atoi(item)
+		if err != nil {
+			continue
+		}
+		urls_int = append(urls_int, temp)
+	}
+	ip := request.URL.Query().Get("ip")
+	obj.Request_id = request_id
+	obj.Url_package = urls_int
+	obj.Ip = ip
+	validate := validator.New()
+	err = validate.Struct(obj)
+	if err != nil {
+		http.Error(writer, "", http.StatusNoContent)
+	}
+}
+
 // Parsing POST body to ClientRequest struct
 func ParsePOST(writer http.ResponseWriter, request *http.Request, obj interface{}) {
 	if request.Header.Get("Content-type") != "" {
@@ -61,7 +90,7 @@ func ParsePOST(writer http.ResponseWriter, request *http.Request, obj interface{
 	}
 }
 
-// Get responce on http.GET and parsing to FinalResponse
+// Get responce on url and parsing to GET Response
 func Get(url string, j *GetResponse) {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -82,7 +111,11 @@ func Get(url string, j *GetResponse) {
 // Handler that serve server
 func createResponce(writer http.ResponseWriter, request *http.Request) {
 	var resp ClientRequest
-	ParsePOST(writer, request, &resp)
+	if request.Method == "GET" {
+		ParseGET(writer, request, &resp)
+	} else {
+		ParsePOST(writer, request, &resp)
+	}
 	//Array of Get responces from url_package
 	var result []GetResponse
 	//Counting how many urls from url_package is in database
